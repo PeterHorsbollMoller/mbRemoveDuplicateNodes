@@ -1,0 +1,360 @@
+'*******************************************************************************
+'**   Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'** 	Program:
+'** 	Modul:
+'**
+'*******************************************************************************
+
+'-------------------------------------
+Include "MapBasic.def"
+Include "Icons.def"
+Include "Menu.def"
+'**default constants...
+Include "Library\Defaults.def"
+
+Define xProgram 		"RemoveDuplicateNodes"
+Define xProgramMenu		"Remove Duplicate Nodes"
+Define xVersion 		"1.0"
+Define xYear			"2017"
+Define xAddToMenuBar	FALSE
+
+Define FILE_INI			GetFolderPath$(FOLDER_MI_PREFERENCE) & xProgram & ".ini"
+Define FILE_DBG			ApplicationDirectory$() & xProgram & ".dbg"
+'Define FILE_DLL			ApplicationDirectory$() & xProgram & ".dll"
+Define FILE_PAD			GetFolderPath$(FOLDER_MI_PREFERENCE) & xProgram & ".btp"
+
+'-------------------------------------
+Include "Library\CONFIGFILELib.def"
+Include "Library\DEBUGLib.def"
+Include "Library\ERRORLib.def"
+Include "Library\ProgramInfo.def"
+Include "Library\TABLELib.def"
+
+'-----------------------------------------------------------------------------------------
+Declare Sub Main
+Declare Sub EndProgram
+
+Declare Sub MENURemoveDuplicateNodes
+Declare Sub MENUMarkDuplicateNodes
+
+Declare Function MarkDuplicateNodes(	  ByVal oObj As Object		'The object (polyline or polygon) to remove duplicate nodes in
+								, ByVal fTolerance As Float	'The tolerance defining whether two nodes are "the same", distance is measured using Cartesian calculation
+								) As Object				'Returns the object with duplicate nodes removed
+Declare Function OBJRemoveDuplicateNodes( ByVal oObj As Object		'The object (polyline or polygon) to remove duplicate nodes in
+								, ByVal fTolerance As Float	'The tolerance defining whether two nodes are "the same", distance is measured using Cartesian calculation
+								) As Object				'Returns the object with duplicate nodes removed
+
+'**********************************************************************************************''
+'**   Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'
+'**********************************************************************************************''
+Sub Main
+
+OnError GoTo ErrorOccured
+
+	'***Initializing ApplicationInfo
+	Call PRGISetApplicationName(xProgram)
+	Call PRGISetApplicationVersion(xVersion)
+	Call PRGISetApplicationCopyrightYear(xYear)
+	Call PRGISetApplicationDevelopedBy("Peter Horsbøll Møller")
+
+	'***Enabling Debug if file exists
+	Call DEBUGEnableByFile(FILE_DBG)
+
+	If SystemInfo(SYS_INFO_MIVERSION) >= 1520 Then
+		Alter Menu ID 4 Add
+			"Mark Duplicate Nodes..."
+				HelpMsg ""
+				Calling MENUMarkDuplicateNodes,
+			"Remove Duplicate Nodes..."
+				HelpMsg ""
+				Calling MENURemoveDuplicateNodes
+	Else
+		Create Menu xProgramMenu As
+			"Mark Duplicate Nodes..."
+				HelpMsg ""
+				Calling MENUMarkDuplicateNodes,
+			"Remove Duplicate Nodes..."
+				HelpMsg ""
+				Calling MENURemoveDuplicateNodes,
+			"(-",
+			"End program"
+				Calling EndProgram,
+			"About..."
+				Calling PRGIAboutbox
+
+		If xAddToMenuBar Then
+			'Remove the Window menu and Help menu
+			Alter Menu Bar Remove ID 6, ID 7
+			'Add the custom menu, then the Window & Help menus
+			Alter Menu Bar Add xProgramMenu, ID 6, ID 7
+		Else
+			Alter Menu ID 4
+				Add "(-", xProgramMenu  As xProgramMenu
+		End If
+	End If
+
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "Main")
+	Call ERRShow()
+
+End Sub
+
+'****************************************
+'**   Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'**   Ending MapBasic application
+'****************************************
+Sub EndProgram
+
+OnError GoTo ErrorOccured
+
+	End Program
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "EndProgram")
+	Call ERRShow()
+
+End Sub
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'Parameters:
+'
+'**********************************************************************************************''
+Sub MENURemoveDuplicateNodes
+
+Dim	sTab, sTolerance	As String,
+	fTolerance As Float
+
+OnError GoTo ErrorOccured
+
+'	sTab			= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TABLE")
+	sTolerance	= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TOLERANCE")
+	If sTolerance = "" Then
+		fTolerance	= 0.1
+	Else
+		fTolerance	= DeformatNumber$(sTolerance)
+	End If
+
+'	If sTab = "" Then
+		If SelectionInfo(SEL_INFO_NROWS) = 0 Then
+			Note "Please select records to process!"
+			Exit Sub
+		End If
+
+		sTab	= SelectionInfo(SEL_INFO_SELNAME)
+
+		Set CoordSys Table sTab
+
+		Select * From sTab
+			Where OBJ
+			Into __TO__PROCESS NoSelect
+
+		If TableInfo(__TO__PROCESS, TAB_INFO_NROWS) > 0 Then
+			Print "Removing duplicate nodes, tolerance: " & FormatNumber$(fTolerance)
+
+			Select Sum(Val(Str$(ObjectInfo(OBJ, OBJ_INFO_NPNTS)))) "NUM_PNTS"
+				From __TO__PROCESS
+				Into __COUNT__NODES NoSelect
+			Fetch First From __COUNT__NODES
+			Print "Nodes before cleaning: " & __COUNT__NODES.NUM_PNTS
+			Close Table __COUNT__NODES
+
+			Update __TO__PROCESS
+				Set OBJ = OBJRemoveDuplicateNodes(OBJ, fTolerance)
+
+			Select Sum(Val(Str$(ObjectInfo(OBJ, OBJ_INFO_NPNTS)))) "NUM_PNTS"
+				From __TO__PROCESS
+				Into __COUNT__NODES NoSelect
+			Fetch First From __COUNT__NODES
+			Print "Nodes after cleaning: " & __COUNT__NODES.NUM_PNTS
+			Close Table __COUNT__NODES
+		Else
+			Note "The selected record(s) had not spatial objects!"
+		End If
+
+		Close Table __TO__PROCESS
+
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "MENURemoveDuplicateNodes")
+	Call ERRShow()
+
+End Sub
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'Parameters:
+'
+'**********************************************************************************************''
+Sub MENUMarkDuplicateNodes
+
+Dim	sTab, sTolerance As String,
+	fTolerance As Float,
+	nWID As Integer
+
+OnError GoTo ErrorOccured
+
+'	sTab			= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TABLE")
+	sTolerance	= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TOLERANCE")
+	If sTolerance = "" Then
+		fTolerance	= 0.1
+	Else
+		fTolerance	= DeformatNumber$(sTolerance)
+	End If
+
+	nWID = FrontWindow()
+	If nWID = 0 Then
+		Note "Please open a map window!"
+		Exit Sub
+	End If
+	If WindowInfo(nWID, WIN_INFO_TYPE) <> WIN_MAPPER Then
+		Note "Please open a map window!"
+		Exit Sub
+	End If
+
+'	If sTab = "" Then
+		If SelectionInfo(SEL_INFO_NROWS) = 0 Then
+			Note "Please select records to process!"
+			Exit Sub
+		End If
+
+		sTab	= SelectionInfo(SEL_INFO_SELNAME)
+
+		Set CoordSys Table sTab
+
+		Select * From sTab
+			Where OBJ
+			Into __TO__PROCESS NoSelect
+
+		If TableInfo(__TO__PROCESS, TAB_INFO_NROWS) > 0 Then
+			Print "Marking duplicate nodes, tolerance: " & FormatNumber$(fTolerance)
+
+			Update __TO__PROCESS
+				Set OBJ = MarkDuplicateNodes(OBJ, fTolerance)
+
+		Else
+			Note "The selected record(s) had not spatial objects!"
+		End If
+
+		Close Table __TO__PROCESS
+'	End If
+
+	Note "Check the cosmetic layer for marked overlapping nodes in the selected objects"
+
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "MENURemoveDuplicateNodes")
+	Call ERRShow()
+
+End Sub
+
+Function MarkDuplicateNodes(	  ByVal oObj As Object		'The object (polyline or polygon) to remove duplicate nodes in
+						, ByVal fTolerance As Float	'The tolerance defining whether two nodes are "the same", distance is measured using Cartesian calculation
+						) As Object				'Returns the object with duplicate nodes removed
+
+Dim	nSegm, nNode, nNumNodes As Integer,
+	fPrevX, fPrevY, fX, fY As Float
+
+OnError GoTo ErrorOccured
+
+MarkDuplicateNodes = oObj
+
+	If NOT ObjectInfo(oObj, OBJ_INFO_TYPE) IN (OBJ_TYPE_PLINE, OBJ_TYPE_REGION) Then
+		Exit Function
+	End If
+
+'	Call DEBUGPrint("MarkDuplicateNodes")
+	For nSegm = 1 To ObjectInfo(oObj, OBJ_INFO_NPOLYGONS)
+'		Call DEBUGPrint("   Segment: " & nSegm)
+
+		nNumNodes	= ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm)
+		fPrevX	= ObjectNodeX(oObj, nSegm, nNumNodes)
+		fPrevY	= ObjectNodeY(oObj, nSegm, nNumNodes)
+
+		For nNode = (nNumNodes - 1) To 1 Step -1
+'			Call DEBUGPrint("      Node: " & nNode)
+			fX	= ObjectNodeX(oObj, nSegm, nNode)
+			fY	= ObjectNodeY(oObj, nSegm, nNode)
+
+			If CartesianDistance(fPrevX, fPrevY, fX, fY, "m") <= fTolerance Then
+				Insert Into WindowInfo(FrontWindow(), WIN_INFO_TABLE)
+					(OBJ)
+					Values (CreatePoint(fX, fY))
+			Else
+				fPrevX	= fX
+				fPrevY	= fY
+			End If
+		Next		'nNode
+	Next		'nSegm
+
+MarkDuplicateNodes = oObj
+
+	Exit Function
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "MarkDuplicateNodes")
+	Call ERRShow()
+
+End Function
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Pitney Bowes Software
+'Parameters:
+'	:
+'Return value:
+'
+'**********************************************************************************************''
+Function OBJRemoveDuplicateNodes(	  ByVal oObj As Object		'The object (polyline or polygon) to remove duplicate nodes in
+							, ByVal fTolerance As Float	'The tolerance defining whether two nodes are "the same", distance is measured using Cartesian calculation
+							) As Object				'Returns the object with duplicate nodes removed
+
+Dim	nSegm, nNode, nNumNodes As Integer,
+	fPrevX, fPrevY, fX, fY As Float
+
+OnError GoTo ErrorOccured
+
+OBJRemoveDuplicateNodes = oObj
+
+	If NOT ObjectInfo(oObj, OBJ_INFO_TYPE) IN (OBJ_TYPE_PLINE, OBJ_TYPE_REGION) Then
+		Exit Function
+	End If
+
+'	Call DEBUGPrint("OBJRemoveDuplicateNodes")
+	For nSegm = 1 To ObjectInfo(oObj, OBJ_INFO_NPOLYGONS)
+'		Call DEBUGPrint("   Segment: " & nSegm)
+
+		nNumNodes	= ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm)
+		fPrevX	= ObjectNodeX(oObj, nSegm, nNumNodes)
+		fPrevY	= ObjectNodeY(oObj, nSegm, nNumNodes)
+
+		For nNode = (nNumNodes - 1) To 2 Step -1
+'			Call DEBUGPrint("      Node: " & nNode)
+			fX	= ObjectNodeX(oObj, nSegm, nNode)
+			fY	= ObjectNodeY(oObj, nSegm, nNode)
+
+			If CartesianDistance(fPrevX, fPrevY, fX, fY, "m") <= fTolerance Then
+				Call DEBUGPrint("      - Removing Node " & nNode & " from segment " & nSegm)
+				Alter Object oObj
+					Node Remove Position nSegm, nNode
+			Else
+				fPrevX	= fX
+				fPrevY	= fY
+			End If
+		Next		'nNode
+	Next		'nSegm
+
+OBJRemoveDuplicateNodes = oObj
+
+	Exit Function
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "OBJRemoveDuplicateNodes")
+	Call ERRShow()
+
+End Function
