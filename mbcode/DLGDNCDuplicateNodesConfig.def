@@ -1,0 +1,5 @@
+﻿Declare Function DLGDNCDuplicateNodesConfig( ByVal sTitle As String
+										, ByVal sTab As String) As Logical
+
+Declare Function DLGDNCGetTolerance() As Float
+Declare Sub DLGDNCSetTolerance(ByVal fTolerance As Float)

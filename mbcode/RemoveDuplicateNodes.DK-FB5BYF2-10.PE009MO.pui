@@ -1,13 +1,21 @@
 [Open Files]
 Active File Display Mode=1
-Active File Index=0
-Open File Line0=1228
-Open File Pos0=2846
-Open File Window Pos0=0,1,-1,-1,-1,-1,3,31,2742,1224
-Open File0=D:\Dropbox (Horsboll-Moller)\3. MB_Kode\mbRemoveDuplicateNodes\mbcode\MENURemoveDuplicateNodes.mb
-Open File1=
+Active File Index=2
+Open File Line0=552
+Open File Line1=887400
+Open File Line2=459349
+Open File Pos0=1890
+Open File Pos1=892262
+Open File Pos2=461978
+Open File Window Pos0=0,1,-1,-1,-1,-1,3,31,3300,1242
+Open File Window Pos1=0,1,-1,-1,-1,-1,3,31,3300,1242
+Open File Window Pos2=0,1,-1,-1,-1,-1,3,31,3300,1242
+Open File0=D:\Dropbox (Horsboll-Moller)\3. MB_Kode\mbRemoveDuplicateNodes\mbcode\Library\ERRORLib.def
+Open File1=D:\Dropbox (Horsboll-Moller)\3. MB_Kode\mbRemoveDuplicateNodes\mbcode\Library\MapBasic\IMapInfoPro.def
+Open File2=C:\MapInfo\MapBasic\17.0\IMapInfoPro.def
+Open File3=
 Remember Files=1
 
 [Project Information]
 	Project Start=E107040001000A00090014000E00000022
-	Working Time=861
+	Working Time=131472

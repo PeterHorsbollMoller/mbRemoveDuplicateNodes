@@ -1,0 +1,190 @@
+﻿'*******************************************************************************
+'** 	Created By Peter Horsbøll Møller, Precisely
+'** 	Program:
+'** 	Modul:
+'**
+'*******************************************************************************
+
+'-------------------------------------
+Include "MapBasic.def"
+Include "Icons.def"
+Include "Menu.def"
+'**default constants...
+Include "Library\Defaults.def"
+
+'-------------------------------------
+Include "Library\DEBUGLib.def"
+Include "Library\ERRORLib.def"
+Include "Library\TABLELib.def"
+
+Include "DLGDNCDuplicateNodesConfig.def"
+
+Define	CTRL_TXT_TOLERANCE			100
+Define	CTRL_TXT_COORDSYS			200
+Define	CTRL_TXT_COORDSYS_WARNING	300
+Define	CTRL_CMD_OK				1000
+
+Declare Sub DLGDNCHandler_OnLoad
+Declare Sub DLGDNCHandler_OKClicked
+
+Dim	mfTolerance As Float
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Precisely
+'Parameters:
+'	:
+'Return value:
+'
+'**********************************************************************************************''
+Function DLGDNCDuplicateNodesConfig(	  ByVal sTitle As String
+								, ByVal sTab As String) As Logical
+
+OnError GoTo ErrorOccured
+
+DLGDNCDuplicateNodesConfig = FALSE
+
+	Dialog
+		Title sTitle	'"Remove Duplicate Nodes"
+		Calling DLGDNCHandler_OnLoad
+
+		Control StaticText
+			Position 5,5
+			Title "Tolerance, meters"
+		Control EditText		ID CTRL_TXT_TOLERANCE
+			Position 5,15		Width 150
+			Value FormatNumber$(DLGDNCGetTolerance())
+
+		Control StaticText
+			Position 5,35
+			Title "Projection"
+		Control EditText		ID CTRL_TXT_COORDSYS
+			Position 5,45		Width 200
+			Disable
+			Value TableInfo(sTab, TAB_INFO_COORDSYS_NAME)
+
+		Control StaticText		ID CTRL_TXT_COORDSYS_WARNING
+			Position 5,65		Width 200		Height 30
+			Title "Note that this tool doesn't function with Lat/Long projections! Hit Cancel if the projection above is Lat/Long as you otherwise risk deleting all nodes in your objects."
+
+		Control OKButton		ID CTRL_CMD_OK
+			Calling DLGDNCHandler_OKClicked
+		Control CancelButton
+
+	If not CommandInfo(CMD_INFO_DLG_OK) Then
+		Exit Function
+	End If
+
+DLGDNCDuplicateNodesConfig = TRUE
+
+	Exit Function
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "DLGDNCDuplicateNodesConfig")
+	Call ERRShow()
+
+End Function
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Precisely
+'Parameters:
+'
+'**********************************************************************************************''
+Sub DLGDNCHandler_OnLoad
+
+Dim	sValue As String
+
+OnError GoTo ErrorOccured
+
+	sValue = ReadControlValue(CTRL_TXT_COORDSYS)
+	If sValue Like "%Longitude%" Then
+		Alter Control CTRL_CMD_OK Disable
+		Alter Control CTRL_TXT_COORDSYS_WARNING Title "Warning: Lat/Long based coordinate system detected! You can not use this tool on the selected table."
+		Exit Sub
+	ElseIf sValue Like "%Latitude%" Then
+		Alter Control CTRL_CMD_OK Disable
+		Alter Control CTRL_TXT_COORDSYS_WARNING Title "Warning: Lat/Long based coordinate system detected! You can not use this tool on the selected table."
+		Exit Sub
+	End If
+
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "DLGDNCHandler_OnLoad")
+	Call ERRShow()
+
+End Sub
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Precisely
+'Parameters:
+'
+'**********************************************************************************************''
+Sub DLGDNCHandler_OKClicked
+
+Dim	sValue As String
+
+OnError GoTo ErrorOccured
+
+	sValue = ReadControlValue(CTRL_TXT_TOLERANCE)
+	If sValue = "" Then
+		Note "Please enter a value for the tolerance!"
+		Dialog Preserve
+		Exit Sub
+	ElseIf Val(DeformatNumber$(sValue)) <= 0 Then
+		Note "Please enter a value for the tolerance larger than 0!"
+		Dialog Preserve
+		Exit Sub
+	End If
+
+	Call DLGDNCSetTolerance(Val(DeformatNumber$(sValue)))
+
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "DLGDNCHandler_OKClicked")
+	Call ERRShow()
+
+End Sub
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Precisely
+'Parameters:
+'	:
+'Return value:
+'
+'**********************************************************************************************''
+Function DLGDNCGetTolerance() As Float
+
+OnError GoTo ErrorOccured
+
+	If mfTolerance = 0 Then
+		mfTolerance = 0.1	'meters
+	End If
+
+	DLGDNCGetTolerance = mfTolerance
+
+	Exit Function
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "DLGDNCGetTolerance")
+	Call ERRShow()
+
+End Function
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Precisely
+'Parameters:
+'	:
+'Return value:
+'
+'**********************************************************************************************''
+Sub DLGDNCSetTolerance(ByVal fTolerance As Float)
+
+OnError GoTo ErrorOccured
+
+	mfTolerance = fTolerance
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "DLGDNCSetTolerance")
+	Call ERRShow()
+
+End Sub

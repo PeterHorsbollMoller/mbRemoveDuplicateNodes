@@ -6,49 +6,68 @@
 '*******************************************************************************
 
 '-------------------------------------
+Include "Enums.def"
 Include "MapBasic.def"
 Include "Icons.def"
 Include "Menu.def"
 '**default constants...
 Include "Library\Defaults.def"
+Include "Library\RibbonElements.def"
 
 Define xProgram 		"RemoveDuplicateNodes"
 Define xProgramMenu		"Remove Duplicate Nodes"
-Define xVersion 		"1.0"
-Define xYear			"2017"
+Define xVersion 		"1.1.0"
+Define xYear			"2022"
 Define xAddToMenuBar	FALSE
 
 Define FILE_INI			GetFolderPath$(FOLDER_MI_PREFERENCE) & xProgram & ".ini"
 Define FILE_DBG			ApplicationDirectory$() & xProgram & ".dbg"
 'Define FILE_DLL			ApplicationDirectory$() & xProgram & ".dll"
 Define FILE_PAD			GetFolderPath$(FOLDER_MI_PREFERENCE) & xProgram & ".btp"
+Define PATH_IMAGES			ApplicationDirectory$() & "Images\"
 
 '-------------------------------------
 Include "Library\CONFIGFILELib.def"
 Include "Library\DEBUGLib.def"
 Include "Library\ERRORLib.def"
 Include "Library\ProgramInfo.def"
+Include "Library\RIBBONLib.def"
 Include "Library\TABLELib.def"
+
+Include "DLGDNCDuplicateNodesConfig.def"
+Include "DLGSSCSmallSegmentsConfig.def"
 
 '-----------------------------------------------------------------------------------------
 Declare Sub Main
 Declare Sub EndProgram
+Declare Sub EndHandler
 
 Declare Sub MENURemoveDuplicateNodes
 Declare Sub MENUMarkDuplicateNodes
+Declare Sub MENURemoveSmallPolygonSegments
 
 Declare Function MarkDuplicateNodes(	  ByVal oObj As Object		'The object (polyline or polygon) to remove duplicate nodes in
 								, ByVal fTolerance As Float	'The tolerance defining whether two nodes are "the same", distance is measured using Cartesian calculation
+								, ByVal nMID As Integer		'Map Window to insert the 'marks' into
 								) As Object				'Returns the object with duplicate nodes removed
 Declare Function OBJRemoveDuplicateNodes( ByVal oObj As Object		'The object (polyline or polygon) to remove duplicate nodes in
 								, ByVal fTolerance As Float	'The tolerance defining whether two nodes are "the same", distance is measured using Cartesian calculation
 								) As Object				'Returns the object with duplicate nodes removed
+
+Declare Function OBJRemoveSmallPolygonSegments(	  ByVal oObj As Object				'The object (polyline or polygon) to remove duplicate nodes in
+										, ByVal fToleranceArea As Float		'The tolerance defining whether the area of a segment is too small
+										, ByVal nToleranceNumNodes As Integer 	'The tolerance defining whether the number of nodes in a segment is too small
+										) As Object						'Returns the object with duplicate nodes removed
+
 
 '**********************************************************************************************''
 '**   Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
 '
 '**********************************************************************************************''
 Sub Main
+
+Dim	nCtrlIdx As Integer,
+	sTabName, sGroupName, sSplitButtonName, sSplitButtonGroupName As String
 
 OnError GoTo ErrorOccured
 
@@ -57,47 +76,58 @@ OnError GoTo ErrorOccured
 	Call PRGISetApplicationVersion(xVersion)
 	Call PRGISetApplicationCopyrightYear(xYear)
 	Call PRGISetApplicationDevelopedBy("Peter Horsbøll Møller")
+	Call PRGISetApplicationImageUri(PATH_IMAGES & "DuplicateNodesRemove_32.png")
+	Call PRGISetDescription("Remove Duplicate Nodes helps you clean up your polygon and polyline data by removing duplicate nodes and small segments. The tool adds it's capabilities to the Fix/Clean dropdown on the Spatial tab")
 
 	'***Enabling Debug if file exists
 	Call DEBUGEnableByFile(FILE_DBG)
 
-	If SystemInfo(SYS_INFO_MIVERSION) >= 1520 Then
-		Alter Menu ID 4 Add
-			"Mark Duplicate Nodes..."
-				HelpMsg ""
-				Calling MENUMarkDuplicateNodes,
-			"Remove Duplicate Nodes..."
-				HelpMsg ""
-				Calling MENURemoveDuplicateNodes
-	Else
-		Create Menu xProgramMenu As
-			"Mark Duplicate Nodes..."
-				HelpMsg ""
-				Calling MENUMarkDuplicateNodes,
-			"Remove Duplicate Nodes..."
-				HelpMsg ""
-				Calling MENURemoveDuplicateNodes,
-			"(-",
-			"End program"
-				Calling EndProgram,
-			"About..."
-				Calling PRGIAboutbox
+	sTabName				= TAB_SPATIAL
+	sGroupName			= TAB_GROUP_SPATIAL_EDIT
+	sSplitButtonName		= "FixCleanSplitButton"
+	sSplitButtonGroupName	= "FixCleanButtonMenuGroup"
 
-		If xAddToMenuBar Then
-			'Remove the Window menu and Help menu
-			Alter Menu Bar Remove ID 6, ID 7
-			'Add the custom menu, then the Window & Help menus
-			Alter Menu Bar Add xProgramMenu, ID 6, ID 7
-		Else
-			Alter Menu ID 4
-				Add "(-", xProgramMenu  As xProgramMenu
-		End If
+	nCtrlIdx = RBNSplitButtonGroupAddControl("cmdMarkDuplicateNodes", "Mark Duplicate Nodes", "", ControlType_Button, sTabName, sGroupName, sSplitButtonName, sSplitButtonGroupName)
+	If nCtrlIdx > 0 Then
+		Call RBNControlSetToolTipIdx(nCtrlIdx, PRGIGetApplicationName(), "Mark duplicate nodes in selection.", "Select a polygon/polyline from the editable layer.")
+		Call RBNControlSetIconsIdx(nCtrlIdx, CONTROL_SIZE_LARGE, "", PATH_IMAGES & "DuplicateNodesMark_32.png")
+		Call RBNControlSetCustomMBXHandlerIdx(nCtrlIdx, "MENUMarkDuplicateNodes")
+	End If
+	nCtrlIdx = RBNSplitButtonGroupAddControl("cmdRemoveDuplicateNodes", "Remove Duplicate Nodes", "", ControlType_Button, sTabName, sGroupName, sSplitButtonName, sSplitButtonGroupName)
+	If nCtrlIdx > 0 Then
+		Call RBNControlSetToolTipIdx(nCtrlIdx, PRGIGetApplicationName(), "Remove duplicate nodes in selection.", "Select a polygon/polyline from the editable layer.")
+		Call RBNControlSetIconsIdx(nCtrlIdx, CONTROL_SIZE_LARGE, "", PATH_IMAGES & "DuplicateNodesRemove_32.png")
+		Call RBNControlSetCustomMBXHandlerIdx(nCtrlIdx, "MENURemoveDuplicateNodes")
+	End If
+
+	nCtrlIdx = RBNSplitButtonGroupAddControl("cmdRemoveSmallSegments", "Remove Small Segments", "", ControlType_Button, sTabName, sGroupName, sSplitButtonName, sSplitButtonGroupName)
+	If nCtrlIdx > 0 Then
+		Call RBNControlSetToolTipIdx(nCtrlIdx, PRGIGetApplicationName(), "Remove Small Polygon Segments in selection.", "Select a polygon/polyline from the editable layer.")
+		Call RBNControlSetIconsIdx(nCtrlIdx, CONTROL_SIZE_LARGE, "", PATH_IMAGES & "PolygonRemove_32.png")
+		Call RBNControlSetCustomMBXHandlerIdx(nCtrlIdx, "MENURemoveSmallPolygonSegments")
 	End If
 
 	Exit Sub
 '-------------------------
 ErrorOccured:
 	Call ERRCreate(Err(), Error$(), "Main")
+	Call ERRShow()
+
+End Sub
+
+'****************************************
+'**   Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'**   Ending MapBasic application
+'****************************************
+Sub EndHandler
+
+OnError GoTo ErrorOccured
+
+	Call RBNEndHandler
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "EndHandler")
 	Call ERRShow()
 
 End Sub
@@ -126,57 +156,51 @@ End Sub
 '**********************************************************************************************''
 Sub MENURemoveDuplicateNodes
 
-Dim	sTab, sTolerance	As String,
-	fTolerance As Float
+Dim	sTab, sTolerance As String
 
 OnError GoTo ErrorOccured
 
-'	sTab			= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TABLE")
-	sTolerance	= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TOLERANCE")
-	If sTolerance = "" Then
-		fTolerance	= 0.1
-	Else
-		fTolerance	= DeformatNumber$(sTolerance)
+	If SelectionInfo(SEL_INFO_NROWS) = 0 Then
+		Note "Please select records to process!"
+		Exit Sub
 	End If
 
-'	If sTab = "" Then
-		If SelectionInfo(SEL_INFO_NROWS) = 0 Then
-			Note "Please select records to process!"
-			Exit Sub
-		End If
+	sTab	= SelectionInfo(SEL_INFO_SELNAME)
 
-		sTab	= SelectionInfo(SEL_INFO_SELNAME)
+	If not DLGDNCDuplicateNodesConfig("Remove Duplicate Nodes", sTab) Then
+		Exit Sub
+	End If
 
-		Set CoordSys Table sTab
+	Set CoordSys Table sTab
 
-		Select * From sTab
-			Where OBJ
-			Into __TO__PROCESS NoSelect
+	Select * From sTab
+		Where OBJ
+		Into __TO__PROCESS NoSelect Hide
 
-		If TableInfo(__TO__PROCESS, TAB_INFO_NROWS) > 0 Then
-			Print "Removing duplicate nodes, tolerance: " & FormatNumber$(fTolerance)
+	If TableInfo(__TO__PROCESS, TAB_INFO_NROWS) > 0 Then
+		Print "Removing duplicate nodes, tolerance: " & FormatNumber$(DLGDNCGetTolerance())
 
-			Select Sum(Val(Str$(ObjectInfo(OBJ, OBJ_INFO_NPNTS)))) "NUM_PNTS"
-				From __TO__PROCESS
-				Into __COUNT__NODES NoSelect
-			Fetch First From __COUNT__NODES
-			Print "Nodes before cleaning: " & __COUNT__NODES.NUM_PNTS
-			Close Table __COUNT__NODES
+		Select Sum(Val(Str$(ObjectInfo(OBJ, OBJ_INFO_NPNTS)))) "NUM_PNTS"
+			From __TO__PROCESS
+			Into __COUNT__NODES NoSelect Hide
+		Fetch First From __COUNT__NODES
+		Print "Total Number of Nodes before Cleaning: " & FormatNumber$(__COUNT__NODES.NUM_PNTS)
+		Close Table __COUNT__NODES
 
-			Update __TO__PROCESS
-				Set OBJ = OBJRemoveDuplicateNodes(OBJ, fTolerance)
+		Update __TO__PROCESS
+			Set OBJ = OBJRemoveDuplicateNodes(OBJ, DLGDNCGetTolerance())
 
-			Select Sum(Val(Str$(ObjectInfo(OBJ, OBJ_INFO_NPNTS)))) "NUM_PNTS"
-				From __TO__PROCESS
-				Into __COUNT__NODES NoSelect
-			Fetch First From __COUNT__NODES
-			Print "Nodes after cleaning: " & __COUNT__NODES.NUM_PNTS
-			Close Table __COUNT__NODES
-		Else
-			Note "The selected record(s) had not spatial objects!"
-		End If
+		Select Sum(Val(Str$(ObjectInfo(OBJ, OBJ_INFO_NPNTS)))) "NUM_PNTS"
+			From __TO__PROCESS
+			Into __COUNT__NODES NoSelect Hide
+		Fetch First From __COUNT__NODES
+		Print "Total Number of Nodes after Cleaning: " & FormatNumber$(__COUNT__NODES.NUM_PNTS)
+		Close Table __COUNT__NODES
+	Else
+		Call RBNNotificationShow("Remove Duplicate Nodes", "The selected record(s) had no spatial objects!", Notify_Info, 10000)
+	End If
 
-		Close Table __TO__PROCESS
+	Close Table __TO__PROCESS
 
 	Exit Sub
 '-------------------------
@@ -194,18 +218,9 @@ End Sub
 Sub MENUMarkDuplicateNodes
 
 Dim	sTab, sTolerance As String,
-	fTolerance As Float,
 	nWID As Integer
 
 OnError GoTo ErrorOccured
-
-'	sTab			= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TABLE")
-	sTolerance	= CONFIGReadKey(FILE_INI, "REMOVE DUPLICATE NODES", "TOLERANCE")
-	If sTolerance = "" Then
-		fTolerance	= 0.1
-	Else
-		fTolerance	= DeformatNumber$(sTolerance)
-	End If
 
 	nWID = FrontWindow()
 	If nWID = 0 Then
@@ -217,34 +232,36 @@ OnError GoTo ErrorOccured
 		Exit Sub
 	End If
 
-'	If sTab = "" Then
-		If SelectionInfo(SEL_INFO_NROWS) = 0 Then
-			Note "Please select records to process!"
-			Exit Sub
-		End If
+	If SelectionInfo(SEL_INFO_NROWS) = 0 Then
+		Note "Please select records to process!"
+		Exit Sub
+	End If
 
-		sTab	= SelectionInfo(SEL_INFO_SELNAME)
+	sTab	= SelectionInfo(SEL_INFO_SELNAME)
 
-		Set CoordSys Table sTab
+	If not DLGDNCDuplicateNodesConfig("Mark Duplicate Nodes", sTab) Then
+		Exit Sub
+	End If
 
-		Select * From sTab
-			Where OBJ
-			Into __TO__PROCESS NoSelect
+	Set CoordSys Table sTab
 
-		If TableInfo(__TO__PROCESS, TAB_INFO_NROWS) > 0 Then
-			Print "Marking duplicate nodes, tolerance: " & FormatNumber$(fTolerance)
+	Select * From sTab
+		Where OBJ
+		Into __TO__PROCESS NoSelect Hide
 
-			Update __TO__PROCESS
-				Set OBJ = MarkDuplicateNodes(OBJ, fTolerance)
+	If TableInfo(__TO__PROCESS, TAB_INFO_NROWS) > 0 Then
+		Print "Marking duplicate nodes, tolerance: " & FormatNumber$(DLGDNCGetTolerance())
 
-		Else
-			Note "The selected record(s) had not spatial objects!"
-		End If
+		Update __TO__PROCESS
+			Set OBJ = MarkDuplicateNodes(OBJ, DLGDNCGetTolerance(), nWID)
 
-		Close Table __TO__PROCESS
-'	End If
+	Else
+		Call RBNNotificationShow("Mark Duplicate Nodes", "The selected record(s) had no spatial objects!", Notify_Info, 10000)
+	End If
 
-	Note "Check the cosmetic layer for marked overlapping nodes in the selected objects"
+	Close Table __TO__PROCESS
+
+	Call RBNNotificationShow("Mark Duplicate Nodes", "Check the cosmetic layer for marked overlapping nodes in the selected objects", Notify_Info, 10000)
 
 	Exit Sub
 '-------------------------
@@ -254,8 +271,14 @@ ErrorOccured:
 
 End Sub
 
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'Parameters:
+'
+'**********************************************************************************************''
 Function MarkDuplicateNodes(	  ByVal oObj As Object		'The object (polyline or polygon) to remove duplicate nodes in
 						, ByVal fTolerance As Float	'The tolerance defining whether two nodes are "the same", distance is measured using Cartesian calculation
+						, ByVal nMID As Integer		'Map Window to insert the 'marks' into
 						) As Object				'Returns the object with duplicate nodes removed
 
 Dim	nSegm, nNode, nNumNodes As Integer,
@@ -283,7 +306,7 @@ MarkDuplicateNodes = oObj
 			fY	= ObjectNodeY(oObj, nSegm, nNode)
 
 			If CartesianDistance(fPrevX, fPrevY, fX, fY, "m") <= fTolerance Then
-				Insert Into WindowInfo(FrontWindow(), WIN_INFO_TABLE)
+				Insert Into WindowInfo(nMID, WIN_INFO_TABLE)
 					(OBJ)
 					Values (CreatePoint(fX, fY))
 			Else
@@ -356,5 +379,129 @@ OBJRemoveDuplicateNodes = oObj
 ErrorOccured:
 	Call ERRCreate(Err(), Error$(), "OBJRemoveDuplicateNodes")
 	Call ERRShow()
+
+End Function
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Pitney Bowes
+'Parameters:
+'
+'**********************************************************************************************''
+Sub MENURemoveSmallPolygonSegments
+
+Dim	sTab As String,
+	nWID As Integer
+
+OnError GoTo ErrorOccured
+
+'	nWID = FrontWindow()
+'	If nWID = 0 Then
+'		Note "Please open a map window!"
+'		Exit Sub
+'	End If
+'	If WindowInfo(nWID, WIN_INFO_TYPE) <> WIN_MAPPER Then
+'		Note "Please open a map window!"
+'		Exit Sub
+'	End If
+
+	If SelectionInfo(SEL_INFO_NROWS) = 0 Then
+		Note "Please select records to process!"
+		Exit Sub
+	End If
+
+	sTab	= SelectionInfo(SEL_INFO_SELNAME)
+
+	If Not DLGSSCSmallSegmentsConfig("Remove Small Segments", sTab) Then
+		Exit Sub
+	End If
+
+	Set CoordSys Table sTab
+
+	Select * From sTab
+		Where OBJ
+		Into __TO__PROCESS NoSelect
+
+	If TableInfo(__TO__PROCESS, TAB_INFO_NROWS) > 0 Then
+		Print "MENURemoveSmallPolygonSegments: "
+		Print "   Segment Area Tolerance, sq m: " & FormatNumber$(DLGSSCGetToleranceArea())
+		Print "   Number of Segment Nodes, count: " & FormatNumber$(DLGSSCGetToleranceNumNodes())
+
+		Update __TO__PROCESS
+			Set OBJ = OBJRemoveSmallPolygonSegments(OBJ, DLGSSCGetToleranceArea(), DLGSSCGetToleranceNumNodes())
+
+	Else
+		Call RBNNotificationShow("Remove Small Segments", "The selected record(s) had no spatial objects!", Notify_Info, 10000)
+	End If
+
+	Close Table __TO__PROCESS
+
+	Exit Sub
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "MENURemoveSmallPolygonSegments")
+	Call ERRShow()
+
+End Sub
+
+'**********************************************************************************************''
+'Created by Peter Horsbøll Møller, Pitney Bowes Business Insight
+'Parameters:
+'	:
+'Return value:
+'
+'**********************************************************************************************''
+Function OBJRemoveSmallPolygonSegments(	  ByVal oObj As Object				'The object (polyline or polygon) to remove duplicate nodes in
+								, ByVal fToleranceArea As Float		'The tolerance defining whether the area of a segment is too small
+								, ByVal nToleranceNumNodes As Integer 	'The tolerance defining whether the number of nodes in a segment is too small
+								) As Object						'Returns the object with duplicate nodes removed
+
+Dim	oSegm As object,
+	nSegm, nNode As Integer
+
+OnError GoTo ErrorOccured
+
+OBJRemoveSmallPolygonSegments = oObj
+
+	If ObjectInfo(oObj, OBJ_INFO_TYPE) = OBJ_TYPE_REGION Then
+		For nSegm = ObjectInfo(oObj, OBJ_INFO_NPOLYGONS) To 1 Step -1
+'			Print nSegm & ": Num Nodes " & ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm)
+			If ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm) <= nToleranceNumNodes Then
+				Print "Removing Segment with few Nodes, " & ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm)
+				For nNode = ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm) To 3 Step - 1
+				'	Print "Removing node " & nNode
+					Alter Object oObj
+						Node
+							Remove Position nSegm, nNode
+				Next
+			Else
+				oSegm = ExtractNodes(oObj, nSegm, 1, ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm), TRUE)
+				If Area(oSegm, "sq m") <= fToleranceArea Then
+					Print "removing segment with small Area, area: " & FormatNumber$(Area(oSegm, "sq m"))
+					For nNode = ObjectInfo(oObj, OBJ_INFO_NPOLYGONS + nSegm) To 3 Step -1
+				'		Print "Removing node " & nNode
+						Alter Object oObj
+							Node
+								Remove Position nSegm, nNode
+					Next
+				End If
+			End if
+			'------------------------
+			ContinueNextSegment:
+			'This is where you are sent to in case of removing nodes from a segment go wrong
+		Next
+	End if
+
+OBJRemoveSmallPolygonSegments = oObj
+
+	Exit Function
+'-------------------------
+ErrorOccured:
+	Call ERRCreate(Err(), Error$(), "OBJRemoveSmallPolygonSegments")
+	If ERRGetLatestErrorNo() = 847 Then
+		Resume ContinueNextSegment
+	Else
+		Call ERRPrint()
+		Call ERRShow()
+	End If
 
 End Function

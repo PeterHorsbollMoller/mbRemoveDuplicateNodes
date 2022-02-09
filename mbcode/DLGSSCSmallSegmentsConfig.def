@@ -1,0 +1,7 @@
+﻿Declare Function DLGSSCSmallSegmentsConfig(	 ByVal sTitle As String
+									, ByVal sTab As String) As Logical
+
+Declare Function DLGSSCGetToleranceArea() As Float
+Declare Sub DLGSSCSetToleranceArea(ByVal fTolerance As Float)
+Declare Function DLGSSCGetToleranceNumNodes() As Integer
+Declare Sub DLGSSCSetToleranceNumNodes(ByVal nTolerance As Integer)

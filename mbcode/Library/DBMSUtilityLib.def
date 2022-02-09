@@ -25,6 +25,10 @@
 '					- Function DBUFindOpenConnection(...) As Integer
 '					- Function DBUGetQueryFromTable(...) As String
 '					- Function DBUGetConnectionStringFromTable(...) As String
+'	04-03-2015	Peter Møller added:
+'					- Function DBUGetListOfColumnNames(...) As Integer
+'					- Function DBUGetListOfColumnNamesAndTypes(...) As Integer
+'					- Function DBUGetColumnValuesAsString(...) As Integer
 '*****************************************************************************************************************
 '	Requires:
 '	- DEBUGLib
